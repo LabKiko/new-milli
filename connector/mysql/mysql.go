@@ -136,6 +136,11 @@ func (c *Connector) Connect(ctx context.Context) error {
 			WithLogLevel(gormlogger.LogLevel(c.config.LogLevel)).
 			WithIgnoreRecordNotFoundError(true)
 
+		// Add trace information if available in the context
+		if traceInfo := logger.TraceInfoFromContext(ctx); traceInfo != nil {
+			c.config.Logger = c.config.Logger.WithTraceInfo(traceInfo)
+		}
+
 		gormConfig = &gorm.Config{
 			Logger: gormLogger,
 		}

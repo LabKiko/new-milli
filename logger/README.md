@@ -12,6 +12,8 @@ New Milli 日志模块是一个灵活、可扩展的日志系统，支持多种�
 - 上下文（Context）支持
 - 可配置的时间格式和调用者信息
 - 全局默认日志器和自定义日志器
+- 链路追踪支持（RequestID, TraceID, SpanID）
+- 微服务调用链跟踪
 
 ## 快速开始
 
@@ -27,10 +29,10 @@ func main() {
     logger.Info("这是一条信息日志")
     logger.Warn("这是一条警告日志")
     logger.Error("这是一条错误日志")
-    
+
     // 格式化日志
     logger.Infof("用户 %s 登录成功", "张三")
-    
+
     // 使用字段
     logger.WithFields(
         logger.F("user_id", 123),
@@ -234,6 +236,34 @@ logger.InfoContext(ctx, "这条日志使用上下文")
 logger.ErrorContext(ctx, "发生错误")
 ```
 
+## 链路追踪支持
+
+```go
+// 创建跟踪信息
+traceInfo := logger.NewTraceInfo().
+    WithRequestID("req-12345").
+    WithTraceID("trace-67890").
+    WithSpanID("span-abcdef").
+    WithServiceName("user-service").
+    WithEnvironment("production").
+    WithCustomField("user_id", "user-123")
+
+// 将跟踪信息添加到上下文
+ctx = logger.WithTraceInfo(ctx, traceInfo)
+
+// 使用跟踪信息记录日志
+logger.InfoWithTrace(ctx, "开始处理请求")
+logger.ErrorWithTrace(ctx, "处理请求时发生错误")
+
+// 创建子跨度
+childCtx := logger.WithChildSpan(ctx)
+logger.InfoWithTrace(childCtx, "开始处理子任务")
+
+// 使用日志器记录跟踪信息
+log := logger.LoggerWithTrace(ctx, logger.New(nil))
+log.Info("这条日志包含跟踪信息")
+```
+
 ## 自定义日志器
 
 ```go
@@ -252,6 +282,53 @@ customLogger := logger.New(&logger.Config{
 logger.SetGlobal(customLogger)
 ```
 
+## 在数据库连接器中使用链路追踪
+
+```go
+// 创建一个带有跟踪信息的上下文
+ctx := context.Background()
+traceInfo := logger.NewTraceInfo().
+    WithRequestID("req-12345").
+    WithTraceID("trace-67890").
+    WithSpanID("span-abcdef").
+    WithServiceName("order-service").
+    WithEnvironment("development")
+
+ctx = logger.WithTraceInfo(ctx, traceInfo)
+
+// 连接MySQL
+mysqlConn := mysql.New(
+    mysql.WithAddress("localhost:3306"),
+    mysql.WithUsername("root"),
+    mysql.WithPassword("password"),
+    mysql.WithDatabase("test"),
+    mysql.WithLogger(logger.New(nil).WithFields(logger.F("db", "mysql"))),
+)
+
+// 连接到数据库
+if err := mysqlConn.Connect(ctx); err != nil {
+    logger.ErrorWithTrace(ctx, "无法连接到MySQL", logger.F("error", err))
+    return
+}
+
+// 获取GORM数据库实例
+db := mysqlConn.(*mysql.Connector).DB()
+
+// 使用带有跟踪信息的上下文执行查询
+var users []User
+if err := db.WithContext(ctx).Find(&users).Error; err != nil {
+    logger.ErrorWithTrace(ctx, "查询用户失败", logger.F("error", err))
+    return
+}
+
+// 创建子跨度处理特定任务
+childCtx := logger.WithChildSpan(ctx)
+if err := db.WithContext(childCtx).Create(&User{Name: "张三"}).Error; err != nil {
+    logger.ErrorWithTrace(childCtx, "创建用户失败", logger.F("error", err))
+    return
+}
+```
+
 ## 最佳实践
 
 1. **使用适当的日志级别**：
@@ -266,10 +343,11 @@ logger.SetGlobal(customLogger)
    - 保持字段名称一致
    - 使用有意义的字段名称
 
-3. **使用上下文传递信息**：
-   - 在请求处理的开始创建带有请求 ID 的上下文
-   - 在整个请求处理过程中传递上下文
-   - 使用 `InfoContext`、`ErrorContext` 等函数记录日志
+3. **使用链路追踪**：
+   - 为每个请求创建唯一的 RequestID 和 TraceID
+   - 在微服务之间传递 TraceID
+   - 为每个服务调用创建新的 SpanID
+   - 使用 WithChildSpan 创建子跨度
 
 4. **在生产环境中使用 JSON 格式**：
    - JSON 格式更容易被日志收集和分析工具处理
