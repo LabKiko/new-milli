@@ -1,0 +1,38 @@
+app:
+  name: "new-milli-example"
+  version: "1.0.0"
+
+server:
+  http:
+    address: ":8000"
+    timeout: "5s"
+  grpc:
+    address: ":9000"
+    timeout: "5s"
+
+database:
+  driver: "mysql"
+  dsn: "user:password@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: "1h"
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+
+log:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+tracing:
+  enabled: true
+  exporter: "jaeger"
+  endpoint: "http://localhost:14268/api/traces"
+
+registry:
+  type: "consul"
+  address: "localhost:8500"
+  timeout: "10s"
