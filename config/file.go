@@ -120,26 +120,61 @@ func (s *FileSource) Close() error {
 
 // unmarshal unmarshals the data based on the format
 func (s *FileSource) unmarshal(data []byte) (map[string]interface{}, error) {
-	var result map[string]interface{}
+	var nested map[string]interface{}
 
 	switch s.format {
 	case "json":
-		if err := json.Unmarshal(data, &result); err != nil {
+		if err := json.Unmarshal(data, &nested); err != nil {
 			return nil, err
 		}
 	case "yaml", "yml":
-		if err := yaml.Unmarshal(data, &result); err != nil {
+		if err := yaml.Unmarshal(data, &nested); err != nil {
 			return nil, err
 		}
 	case "toml":
-		if err := toml.Unmarshal(data, &result); err != nil {
+		if err := toml.Unmarshal(data, &nested); err != nil {
 			return nil, err
 		}
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", s.format)
 	}
 
-	return result, nil
+	return flattenMap(nested, ""), nil
+}
+
+// flattenMap takes a nested map and flattens it, prefixing keys with dot notation.
+func flattenMap(data map[string]interface{}, prefix string) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range data {
+		newKey := k
+		if prefix != "" {
+			newKey = prefix + "." + k
+		}
+
+		if subMap, ok := v.(map[string]interface{}); ok {
+			// If the value is a map, recurse
+			for sk, sv := range flattenMap(subMap, newKey) {
+				result[sk] = sv
+			}
+		} else if subMap2, ok := v.(map[interface{}]interface{}); ok {
+            // Handle map[interface{}]interface{} which can come from YAML
+            genericSubMap := make(map[string]interface{})
+            for ik, iv := range subMap2 {
+                if strKey, ok := ik.(string); ok {
+                    genericSubMap[strKey] = iv
+                } else {
+                    // Or skip/error if keys are not strings
+                }
+            }
+            for sk, sv := range flattenMap(genericSubMap, newKey) {
+				result[sk] = sv
+			}
+        } else {
+			// Otherwise, it's a leaf value
+			result[newKey] = v
+		}
+	}
+	return result
 }
 
 // formatFromPath determines the format from the file path
