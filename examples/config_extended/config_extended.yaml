@@ -1,0 +1,13 @@
+application:
+  name: "My App From YAML"
+  version: "1.0.0"
+  port: 8080
+  debug_mode: true
+  features:
+    - "featureA"
+    - "featureB"
+  settings:
+    retry_attempts: 3
+    timeout_seconds: 10
+server:
+  host: "localhost"
